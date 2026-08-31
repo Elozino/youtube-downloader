@@ -1,17 +1,34 @@
 import type { DownloadConfig } from './config';
 import type { DownloadServiceRequest } from './download-service';
 
-const ABSOLUTE_BEST = 'bv*+ba/b';
-const MP4_COMPATIBLE =
-  'bv*[ext=mp4][vcodec^=avc1]+ba[ext=m4a]/b[ext=mp4][vcodec^=avc1]/bv*[ext=mp4]+ba[ext=m4a]/b[ext=mp4]';
+export const MAX_PLAYLIST_ITEMS = 50;
+
+export function formatSelector(
+  request: Pick<DownloadServiceRequest, 'mediaType' | 'quality'>,
+): string {
+  if (request.mediaType === 'audio') return 'ba/b';
+  if (request.quality === 'best') return 'bv*+ba/b';
+  return `bv*[height<=${request.quality}]+ba/b[height<=${request.quality}]`;
+}
 
 export function buildYtDlpArguments(
   request: DownloadServiceRequest,
   config: Pick<DownloadConfig, 'ffmpegPath' | 'maxFileSize'>,
 ): string[] {
+  const playlistArgs =
+    request.sourceKind === 'playlist'
+      ? ['--yes-playlist', '--playlist-end', String(MAX_PLAYLIST_ITEMS)]
+      : ['--no-playlist'];
+  const output =
+    request.sourceKind === 'playlist'
+      ? '%(playlist_index)03d - %(title).160B [%(id)s].%(ext)s'
+      : '%(title).180B [%(id)s].%(ext)s';
+
   const args = [
-    '--no-playlist',
+    ...playlistArgs,
+    '--progress',
     '--newline',
+    '--no-colors',
     '--no-overwrites',
     '--restrict-filenames',
     '--socket-timeout',
@@ -25,19 +42,43 @@ export function buildYtDlpArguments(
     '--ffmpeg-location',
     config.ffmpegPath,
     '--format',
-    request.mode === 'mp4' ? MP4_COMPATIBLE : ABSOLUTE_BEST,
+    formatSelector(request),
     '--output',
-    '%(title).180B [%(id)s].%(ext)s',
+    output,
     '--progress-template',
-    'download:__PROGRESS__%(progress._percent_str)s|%(progress.downloaded_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s',
+    'download:__PROGRESS__%(progress._percent_str)s|%(progress.downloaded_bytes)s|%(progress.total_bytes_estimate)s|%(progress.speed)s|%(progress.eta)s|%(info.playlist_index)s|%(info.playlist_count)s',
     '--print',
     'after_move:__FILE__%(filepath)s',
   ];
 
-  if (request.mode === 'mp4') {
-    args.push('--merge-output-format', 'mp4');
+  if (request.mediaType === 'audio') {
+    args.push(
+      '--extract-audio',
+      '--audio-format',
+      'mp3',
+      '--audio-quality',
+      audioQuality(request.quality),
+    );
   }
 
   args.push('--', request.canonicalUrl);
   return args;
+}
+
+export function buildInspectionArguments(request: DownloadServiceRequest): string[] {
+  return [
+    request.sourceKind === 'playlist' ? '--yes-playlist' : '--no-playlist',
+    ...(request.sourceKind === 'playlist' ? ['--playlist-end', String(MAX_PLAYLIST_ITEMS)] : []),
+    '--dump-single-json',
+    '--skip-download',
+    '--no-warnings',
+    '--format',
+    formatSelector(request),
+    '--',
+    request.canonicalUrl,
+  ];
+}
+
+function audioQuality(quality: DownloadServiceRequest['quality']): string {
+  return quality === 'best' ? '0' : `${quality}K`;
 }

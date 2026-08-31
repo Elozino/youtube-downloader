@@ -3,8 +3,8 @@ import type { ReactNode } from 'react';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Authorized Video Download',
-  description: 'Download the highest available quality for YouTube videos you own or may use.',
+  title: 'Authorized Media Download',
+  description: 'Download YouTube videos, audio, and playlists you own or may use.',
   robots: { index: false, follow: false },
 };
 

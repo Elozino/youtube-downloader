@@ -10,8 +10,9 @@ declare global {
 
 export const downloadConfig = loadDownloadConfig();
 
+export const downloadService = new YtDlpDownloadService(downloadConfig);
+
 export const downloadManager =
-  globalThis.__youtubeDownloadManager ??
-  new DownloadJobManager(new YtDlpDownloadService(downloadConfig), downloadConfig);
+  globalThis.__youtubeDownloadManager ?? new DownloadJobManager(downloadService, downloadConfig);
 
 globalThis.__youtubeDownloadManager = downloadManager;

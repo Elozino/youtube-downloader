@@ -6,7 +6,6 @@ const ID = 'dQw4w9WgXcQ';
 describe('validateYouTubeUrl', () => {
   it.each([
     `https://www.youtube.com/watch?v=${ID}`,
-    `https://youtube.com/watch?v=${ID}&list=ignored`,
     `https://m.youtube.com/watch?v=${ID}`,
     `https://youtu.be/${ID}?si=ignored`,
     `https://www.youtube.com/shorts/${ID}`,
@@ -16,7 +15,8 @@ describe('validateYouTubeUrl', () => {
     expect(validateYouTubeUrl(input)).toEqual({
       ok: true,
       value: {
-        videoId: ID,
+        sourceId: ID,
+        kind: 'video',
         canonicalUrl: `https://www.youtube.com/watch?v=${ID}`,
       },
     });
@@ -29,7 +29,7 @@ describe('validateYouTubeUrl', () => {
     `https://user:password@youtube.com/watch?v=${ID}`,
     `https://youtube.com:444/watch?v=${ID}`,
     `https://youtu.be/${ID}/extra`,
-    'https://youtube.com/playlist?list=PL123',
+    'https://youtube.com/playlist?list=short',
     'https://youtube.com/watch?v=too-short',
     'not a url',
   ])('rejects unsupported or suspicious input %s', (input) => {
@@ -38,8 +38,23 @@ describe('validateYouTubeUrl', () => {
 
   it('does not preserve user-controlled query parameters', () => {
     const result = validateYouTubeUrl(
-      `https://youtube.com/watch?v=${ID}&output=$(touch%20/tmp/nope)&list=PL123`,
+      `https://youtube.com/watch?v=${ID}&output=$(touch%20/tmp/nope)`,
     );
     expect(result.ok && result.value.canonicalUrl).toBe(`https://www.youtube.com/watch?v=${ID}`);
+  });
+
+  it.each([
+    'https://www.youtube.com/playlist?list=PL1234567890abcdef',
+    `https://www.youtube.com/watch?v=${ID}&list=PL1234567890abcdef&index=2`,
+    `https://youtu.be/${ID}?list=PL1234567890abcdef`,
+  ])('accepts and canonicalizes playlist URLs %s', (input) => {
+    expect(validateYouTubeUrl(input)).toEqual({
+      ok: true,
+      value: {
+        sourceId: 'PL1234567890abcdef',
+        kind: 'playlist',
+        canonicalUrl: 'https://www.youtube.com/playlist?list=PL1234567890abcdef',
+      },
+    });
   });
 });

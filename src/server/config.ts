@@ -10,6 +10,7 @@ export interface DownloadConfig {
   maxRequestsPerHour: number;
   maxFileSize: string;
   maxRuntimeMs: number;
+  inactivityTimeoutMs: number;
   completedTtlMs: number;
   trustProxy: boolean;
 }
@@ -31,6 +32,7 @@ export function loadDownloadConfig(env: NodeJS.ProcessEnv = process.env): Downlo
     maxRequestsPerHour: integerInRange(env.DOWNLOAD_MAX_REQUESTS_PER_HOUR, 10, 1, 1_000),
     maxFileSize,
     maxRuntimeMs: integerInRange(env.DOWNLOAD_MAX_RUNTIME_SECONDS, 1_800, 30, 86_400) * 1_000,
+    inactivityTimeoutMs: integerInRange(env.DOWNLOAD_INACTIVITY_SECONDS, 120, 30, 3_600) * 1_000,
     completedTtlMs: integerInRange(env.DOWNLOAD_COMPLETED_TTL_SECONDS, 900, 30, 86_400) * 1_000,
     trustProxy: env.TRUST_PROXY?.toLowerCase() === 'true',
   };

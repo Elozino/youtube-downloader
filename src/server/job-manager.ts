@@ -5,18 +5,22 @@ import type {
   DownloadJobView,
   DownloadProgress,
   DownloadStatus,
-  QualityMode,
+  MediaQuality,
+  MediaType,
 } from '@/types/download';
 import type { ValidYouTubeUrl } from '@/lib/youtube-url';
 import type { DownloadConfig } from './config';
 import type { DownloadService, DownloadServiceResult } from './download-service';
+import { logEvent } from './logger';
 
 interface InternalJob {
   id: string;
   clientId: string;
   status: DownloadStatus;
-  mode: QualityMode;
-  videoId: string;
+  mediaType: MediaType;
+  quality: MediaQuality;
+  sourceId: string;
+  sourceKind: ValidYouTubeUrl['kind'];
   canonicalUrl: string;
   progress: DownloadProgress;
   controller: AbortController;
@@ -43,15 +47,22 @@ export class DownloadJobManager {
     private readonly config: DownloadConfig,
   ) {}
 
-  create(clientId: string, source: ValidYouTubeUrl, mode: QualityMode): DownloadJobView {
+  create(
+    clientId: string,
+    source: ValidYouTubeUrl,
+    mediaType: MediaType,
+    quality: MediaQuality,
+  ): DownloadJobView {
     this.enforceLimits(clientId);
 
     const job: InternalJob = {
       id: randomUUID(),
       clientId,
       status: 'queued',
-      mode,
-      videoId: source.videoId,
+      mediaType,
+      quality,
+      sourceId: source.sourceId,
+      sourceKind: source.kind,
       canonicalUrl: source.canonicalUrl,
       progress: emptyProgress(),
       controller: new AbortController(),
@@ -61,32 +72,45 @@ export class DownloadJobManager {
 
     this.jobs.set(job.id, job);
     this.recordRequest(clientId);
+    logEvent('info', 'download_job_created', {
+      jobId: job.id,
+      sourceKind: job.sourceKind,
+      mediaType: job.mediaType,
+      quality: job.quality,
+    });
     void this.execute(job);
     return this.toView(job);
   }
 
-  get(id: string): DownloadJobView | undefined {
+  get(id: string, clientId: string): DownloadJobView | undefined {
     const job = this.jobs.get(id);
-    return job ? this.toView(job) : undefined;
+    return job?.clientId === clientId ? this.toView(job) : undefined;
   }
 
-  cancel(id: string): DownloadJobView | undefined {
+  cancel(id: string, clientId: string): DownloadJobView | undefined {
     const job = this.jobs.get(id);
-    if (!job) return undefined;
+    if (!job || job.clientId !== clientId) return undefined;
 
     if (job.status === 'queued' || job.status === 'running') {
       job.status = 'cancelled';
       job.error = undefined;
       job.controller.abort();
-      this.scheduleMetadataRemoval(job);
+      logEvent('info', 'download_job_cancelled', { jobId: job.id });
     }
 
     return this.toView(job);
   }
 
-  claimFile(id: string): DownloadServiceResult | undefined {
+  claimFile(id: string, clientId: string): DownloadServiceResult | undefined {
     const job = this.jobs.get(id);
-    if (job?.status !== 'completed' || !job.result || job.fileClaimed) return undefined;
+    if (
+      job?.clientId !== clientId ||
+      job.status !== 'completed' ||
+      !job.result ||
+      job.fileClaimed
+    ) {
+      return undefined;
+    }
     job.fileClaimed = true;
     return job.result;
   }
@@ -97,10 +121,13 @@ export class DownloadJobManager {
     const { workDir } = job.result;
     job.result = undefined;
     await this.service.removeWorkDir(workDir);
+    this.jobs.delete(id);
+    logEvent('info', 'download_file_released', { jobId: id });
   }
 
   private async execute(job: InternalJob): Promise<void> {
     job.status = 'running';
+    logEvent('info', 'download_job_started', { jobId: job.id });
     let timedOut = false;
     const runtimeTimer = setTimeout(() => {
       timedOut = true;
@@ -112,12 +139,20 @@ export class DownloadJobManager {
       const result = await this.service.download(
         {
           canonicalUrl: job.canonicalUrl,
-          videoId: job.videoId,
-          mode: job.mode,
+          sourceId: job.sourceId,
+          sourceKind: job.sourceKind,
+          mediaType: job.mediaType,
+          quality: job.quality,
         },
         {
           onProgress: (progress) => {
             if (job.status === 'running') job.progress = progress;
+          },
+          onStage: (phase) => {
+            if (job.status === 'running' && job.progress.phase !== phase) {
+              job.progress = { ...job.progress, phase };
+              logEvent('info', 'download_job_phase_changed', { jobId: job.id, phase });
+            }
           },
         },
         job.controller.signal,
@@ -132,6 +167,11 @@ export class DownloadJobManager {
         job.status = 'completed';
         job.progress = { ...job.progress, percent: 100, downloadedBytes: result.sizeBytes };
         job.expiresAt = new Date(Date.now() + this.config.completedTtlMs);
+        logEvent('info', 'download_job_completed', {
+          jobId: job.id,
+          durationMs: Date.now() - job.createdAt.getTime(),
+          sizeBytes: result.sizeBytes,
+        });
       }
     } catch (error) {
       if (timedOut) {
@@ -142,6 +182,13 @@ export class DownloadJobManager {
       } else {
         job.status = 'failed';
         job.error = publicError(error);
+      }
+      if (job.status === 'failed') {
+        logEvent('error', 'download_job_failed', {
+          jobId: job.id,
+          durationMs: Date.now() - job.createdAt.getTime(),
+          error: job.error,
+        });
       }
     } finally {
       clearTimeout(runtimeTimer);
@@ -199,8 +246,10 @@ export class DownloadJobManager {
     return {
       id: job.id,
       status: job.status,
-      mode: job.mode,
-      videoId: job.videoId,
+      mediaType: job.mediaType,
+      quality: job.quality,
+      sourceId: job.sourceId,
+      sourceKind: job.sourceKind,
       progress: job.progress,
       filename: job.result?.filename,
       sizeBytes: job.result?.sizeBytes,
@@ -217,11 +266,14 @@ export class DownloadJobManager {
 
 function emptyProgress(): DownloadProgress {
   return {
+    phase: 'connecting',
     percent: null,
     downloadedBytes: null,
     totalBytes: null,
     speedBytesPerSecond: null,
     etaSeconds: null,
+    itemIndex: null,
+    itemCount: null,
   };
 }
 

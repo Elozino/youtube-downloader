@@ -1,9 +1,18 @@
-import type { DownloadProgress, QualityMode } from '@/types/download';
+import type {
+  DownloadPhase,
+  DownloadProgress,
+  MediaInfo,
+  MediaQuality,
+  MediaType,
+} from '@/types/download';
+import type { ValidYouTubeUrl } from '@/lib/youtube-url';
 
 export interface DownloadServiceRequest {
   canonicalUrl: string;
-  videoId: string;
-  mode: QualityMode;
+  sourceId: string;
+  sourceKind: ValidYouTubeUrl['kind'];
+  mediaType: MediaType;
+  quality: MediaQuality;
 }
 
 export interface DownloadServiceResult {
@@ -15,6 +24,7 @@ export interface DownloadServiceResult {
 
 export interface DownloadCallbacks {
   onProgress(progress: DownloadProgress): void;
+  onStage(phase: DownloadPhase): void;
 }
 
 export interface DownloadService {
@@ -23,5 +33,6 @@ export interface DownloadService {
     callbacks: DownloadCallbacks,
     signal: AbortSignal,
   ): Promise<DownloadServiceResult>;
+  inspect(request: DownloadServiceRequest, signal: AbortSignal): Promise<MediaInfo>;
   removeWorkDir(workDir: string): Promise<void>;
 }

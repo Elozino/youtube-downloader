@@ -1,27 +1,33 @@
 # Authorized YouTube Downloader
 
-A self-hosted Next.js application for downloading the highest available video and audio quality from YouTube **when you own the content or have permission to download it**. The browser starts and monitors a job; a server-side service invokes `yt-dlp` and `ffmpeg`, merges the streams, and removes temporary files after delivery or expiry.
+A self-hosted Next.js application for downloading videos, audio, and playlists from YouTube **when you own the content or have permission to download it**. The browser can inspect an estimated size before starting, monitors a server-side `yt-dlp` and `ffmpeg` job, and automatically starts saving the completed file.
 
 > YouTube's terms and copyright law may restrict downloading. This project does not bypass DRM, authentication, geographic restrictions, or paywalls. The user must affirm authorization for every download.
 
 ## Features
 
-- Strict URL allowlist for individual `youtube.com` and `youtu.be` video links
-- Canonical URLs passed to the downloader, with playlist/query data discarded
-- Absolute-best mode: `best video + best audio`, preserving the best source codecs
-- MP4 mode: prefers H.264 MP4 video plus M4A audio, then other MP4-native streams
+- Strict URL allowlist for `youtube.com` and `youtu.be` video and playlist links
+- Canonical URLs passed to the downloader, with unrelated query data discarded
+- Selectable video resolutions from 360p through 4K, plus best available
+- Selectable MP3 audio quality from 128–256 kbps, plus best available
+- Pre-download title, playlist item count, duration, and size inspection when YouTube reports the required metadata
+- Playlist downloads packaged as one ZIP, with a 50-item safety cap
 - Live percentage, byte count, speed, and ETA when reported by `yt-dlp`
+- Automatic browser save when processing completes
 - Cooperative cancellation with a forced process stop after a short grace period
 - Sanitized, length-bounded filenames and one-time file delivery
 - Automatic cleanup on success, failure, cancellation, timeout, and expiry
 - Process invocation through `spawn(executable, args, { shell: false })`; no shell interpolation
 - Global/per-client concurrency, hourly request, file-size, runtime, and job TTL controls
+- Job status, cancellation, and file delivery bound to the creating client identity
 - A `DownloadService` interface that can be implemented by a queue/background worker later
 
 ## Architecture
 
 ```text
 Browser UI
+   ├── GET  /api/health                liveness check
+   ├── POST /api/media-info            inspect title and estimated size
    ├── POST /api/downloads             create a job
    ├── GET  /api/downloads/:id         poll status/progress
    ├── DELETE /api/downloads/:id       cancel
@@ -35,6 +41,9 @@ Browser UI
           YtDlpDownloadService
           (yt-dlp + ffmpeg process)
 ```
+
+See [docs/architecture.md](docs/architecture.md) for module boundaries, lifecycle guarantees,
+security invariants, observability, testing strategy, and the scaling path.
 
 Jobs are intentionally process-local. This is simple and dependable for one long-running Node.js server. The service boundary in `src/server/download-service.ts` is the seam for moving execution and progress events to a durable queue/worker. Before running multiple application replicas, replace both the job manager and rate limiter with shared storage/coordination.
 
@@ -95,9 +104,7 @@ FFMPEG_PATH=/absolute/path/to/ffmpeg
 
 ```bash
 npm ci
-npm run test
-npm run lint
-npm run build
+npm run check
 npm start
 ```
 
@@ -116,6 +123,7 @@ If a trusted reverse proxy **replaces** `X-Forwarded-For`, set `TRUST_PROXY=true
 | `DOWNLOAD_MAX_REQUESTS_PER_HOUR` |              `10` | Starts allowed per client per rolling hour  |
 | `DOWNLOAD_MAX_FILESIZE`          |              `2G` | Value passed to yt-dlp's `--max-filesize`   |
 | `DOWNLOAD_MAX_RUNTIME_SECONDS`   |            `1800` | Hard runtime before cancellation            |
+| `DOWNLOAD_INACTIVITY_SECONDS`    |             `120` | Stop a downloader that produces no output   |
 | `DOWNLOAD_COMPLETED_TTL_SECONDS` |             `900` | Time a completed file remains available     |
 | `DOWNLOAD_TEMP_DIR`              | OS temp directory | Root for private per-job directories        |
 | `TRUST_PROXY`                    |           `false` | Trust the proxy-provided client address     |
@@ -124,9 +132,11 @@ If a trusted reverse proxy **replaces** `X-Forwarded-For`, set `TRUST_PROXY=true
 
 ## Quality modes
 
-**Absolute best** selects `bv*+ba/b`. YouTube often serves the highest resolutions as VP9 or AV1, so the merged output may be WebM or MKV rather than MP4.
+**Video** selects the best video and audio streams at or below the chosen resolution and merges them without transcoding. The best-available choice uses `bv*+ba/b`. The resulting container depends on the source codecs and may be MP4, WebM, or MKV.
 
-**MP4 compatible** first asks for H.264 MP4 video and M4A audio, falling back to other MP4-native streams when necessary, and requests an MP4 merge. It does not transcode; avoiding a full re-encode keeps downloads fast and prevents quality loss. Consequently, very old devices may still reject an AV1-in-MP4 fallback.
+**Audio** selects the best available audio stream and extracts an MP3. A specific bitrate can be selected, or the best VBR encoder quality can be used.
+
+Reported sizes are estimates until processing completes. Stream size metadata is not available for every video, and extracted audio or merged video can differ slightly from the estimate. The completed job always displays the exact final file size.
 
 ## Tests and quality checks
 
@@ -137,14 +147,14 @@ npm run format:check
 npm run build
 ```
 
-Focused tests cover supported/rejected URL shapes, canonicalization of untrusted URL data, mode-specific `yt-dlp` argument construction, argument boundaries, and filename sanitation.
+Tests cover request and URL validation, canonicalization of untrusted input, mode-specific `yt-dlp` commands, progress parsing, job completion and cancellation, limit enforcement, filename sanitation, and ZIP integrity. CI runs the complete check suite for pull requests and changes to `main`.
 
 ## Operational notes
 
-- The app accepts only one video per request and always supplies `--no-playlist`.
-- A completed file can be streamed once. Its private temporary directory is deleted when the stream closes. Unclaimed files expire automatically.
+- Playlists are limited to their first 50 items and are returned as an uncompressed ZIP. The configured `--max-filesize` limit applies to each playlist item.
+- A completed file automatically starts saving through the browser. Its private temporary directory is deleted when the stream closes. Unclaimed files expire automatically.
 - Failed/cancelled job metadata is retained briefly so the UI can show its final state; media fragments are removed immediately by the service.
-- Job IDs are random UUIDs, but this is not user authentication. Put the app behind access control before exposing it beyond a trusted group.
+- Job IDs are random UUIDs and operations are bound to the creating client identity, but this is not user authentication. Put the app behind access control before exposing it beyond a trusted group.
 - Some videos require account cookies, proof-of-origin tokens, or other site-specific setup. This project deliberately does not accept browser cookies or arbitrary `yt-dlp` options from users.
 
 ## License

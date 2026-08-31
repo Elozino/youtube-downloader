@@ -1,11 +1,13 @@
 export interface ValidYouTubeUrl {
-  videoId: string;
+  sourceId: string;
+  kind: 'video' | 'playlist';
   canonicalUrl: string;
 }
 
 export type YouTubeUrlResult = { ok: true; value: ValidYouTubeUrl } | { ok: false; error: string };
 
 const VIDEO_ID = /^[A-Za-z0-9_-]{11}$/;
+const PLAYLIST_ID = /^[A-Za-z0-9_-]{10,100}$/;
 const YOUTUBE_HOSTS = new Set([
   'youtube.com',
   'www.youtube.com',
@@ -37,6 +39,21 @@ export function validateYouTubeUrl(input: string): YouTubeUrlResult {
 
   const host = parsed.hostname.toLowerCase();
   let candidate: string | null = null;
+  const playlistId = parsed.searchParams.get('list');
+
+  if ((YOUTUBE_HOSTS.has(host) || host === 'youtu.be') && playlistId) {
+    if (!PLAYLIST_ID.test(playlistId)) {
+      return { ok: false, error: 'This does not appear to be a valid YouTube playlist URL.' };
+    }
+    return {
+      ok: true,
+      value: {
+        sourceId: playlistId,
+        kind: 'playlist',
+        canonicalUrl: `https://www.youtube.com/playlist?list=${playlistId}`,
+      },
+    };
+  }
 
   if (host === 'youtu.be') {
     const parts = parsed.pathname.split('/').filter(Boolean);
@@ -59,7 +76,8 @@ export function validateYouTubeUrl(input: string): YouTubeUrlResult {
   return {
     ok: true,
     value: {
-      videoId: candidate,
+      sourceId: candidate,
+      kind: 'video',
       canonicalUrl: `https://www.youtube.com/watch?v=${candidate}`,
     },
   };
