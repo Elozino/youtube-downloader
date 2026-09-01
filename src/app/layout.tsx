@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Authorized Media Download',
+  title: 'Self Hosted Media Download',
   description: 'Download YouTube videos, audio, and playlists you own or may use.',
   icons: {
     icon: '/download-tab-logo.svg',
