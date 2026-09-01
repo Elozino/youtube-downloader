@@ -40,7 +40,11 @@ export function DownloadForm(props: DownloadFormProps) {
           id="youtube-url"
           type="url"
           inputMode="url"
+          enterKeyHint="go"
           autoComplete="url"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
           placeholder="https://www.youtube.com/watch?v=… or playlist?list=…"
           value={props.url}
           onChange={(event) => props.onUrlChange(event.target.value)}

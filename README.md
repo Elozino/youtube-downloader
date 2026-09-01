@@ -93,6 +93,25 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000).
 
+### Use it from a phone on your local network
+
+Connect the computer and phone to the same trusted Wi-Fi network, then start the app on all
+network interfaces:
+
+```bash
+npm run dev:mobile
+```
+
+Find the computer's local IP address (`ipconfig getifaddr en0` on most Macs, or `hostname -I`
+on Linux) and open `http://<computer-ip>:3000` on the phone—for example,
+`http://192.168.1.25:3000`. Allow incoming Node.js connections if the operating-system firewall
+asks. The terminal running the app must remain open while you use it.
+
+Mobile browsers require a tap to save some asynchronously prepared files, so the completed job
+keeps a visible **Save file** button on touch devices. For access away from home, use an
+authenticated HTTPS reverse proxy or VPN; do not expose this unauthenticated downloader directly
+to the public internet.
+
 If the executables are not on the service user's `PATH`, set absolute paths in `.env.local`:
 
 ```dotenv
@@ -107,6 +126,9 @@ npm ci
 npm run check
 npm start
 ```
+
+Use `npm run start:mobile` instead when the production server should listen on your LAN rather
+than only on the current machine.
 
 Run the app as an unprivileged operating-system user behind an HTTPS reverse proxy. Give that user write access only to the selected temporary directory. Keep the server and `yt-dlp` patched.
 

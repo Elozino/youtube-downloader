@@ -16,6 +16,7 @@
 
 html {
   color-scheme: light;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -32,6 +33,8 @@ body {
     'Segoe UI',
     sans-serif;
   min-height: 100vh;
+  min-height: 100dvh;
+  overflow-x: hidden;
 }
 
 button,
@@ -40,8 +43,16 @@ select {
   font: inherit;
 }
 
+button,
+a,
+label,
+select {
+  -webkit-tap-highlight-color: transparent;
+}
+
 main {
   min-height: 100vh;
+  min-height: 100dvh;
   display: grid;
   place-items: center;
   padding: 64px 24px 44px;
@@ -525,21 +536,46 @@ footer p {
 
 @media (max-width: 620px) {
   main {
-    padding: 40px 15px 30px;
+    padding: max(28px, env(safe-area-inset-top)) max(15px, env(safe-area-inset-right))
+      max(24px, env(safe-area-inset-bottom)) max(15px, env(safe-area-inset-left));
     align-items: start;
+  }
+  h1 {
+    font-size: clamp(36px, 11vw, 48px);
+  }
+  .lede {
+    font-size: 15px;
+    line-height: 1.55;
   }
   .hero {
     margin-bottom: 26px;
   }
   .download-card {
-    padding: 21px;
+    padding: 20px 17px;
     border-radius: 18px;
+  }
+  .url-field input,
+  .quality-select {
+    font-size: 16px;
+  }
+  .inspect-button,
+  .cancel-button {
+    min-height: 44px;
+    padding: 8px 0;
+  }
+  .primary-button,
+  .download-link {
+    min-height: 48px;
   }
   .mode-grid {
     grid-template-columns: 1fr;
   }
   .mode-option {
-    min-height: 94px;
+    min-height: 96px;
+    padding: 15px;
+  }
+  .permission-check {
+    min-height: 44px;
   }
   .complete-card {
     align-items: flex-start;
@@ -554,8 +590,13 @@ footer p {
     text-align: left;
   }
   .download-link {
+    display: grid;
+    place-items: center;
     width: 100%;
     text-align: center;
+  }
+  footer {
+    line-height: 1.5;
   }
 }
 

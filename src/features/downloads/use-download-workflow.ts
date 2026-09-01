@@ -57,6 +57,11 @@ export function useDownloadWorkflow() {
 
   useEffect(() => {
     if (job?.status !== 'completed' || !job.downloadUrl || savedJobId.current === job.id) return;
+
+    // Mobile browsers commonly block downloads initiated after asynchronous polling.
+    // Leave the visible "Save file" link in place so the user can start it with a tap.
+    if (window.matchMedia('(pointer: coarse)').matches) return;
+
     savedJobId.current = job.id;
     const link = document.createElement('a');
     link.href = job.downloadUrl;
@@ -65,7 +70,8 @@ export function useDownloadWorkflow() {
     document.body.append(link);
     link.click();
     link.remove();
-    setAutoSaveStarted(true);
+    const timer = window.setTimeout(() => setAutoSaveStarted(true), 0);
+    return () => window.clearTimeout(timer);
   }, [job]);
 
   function setUrl(value: string) {
