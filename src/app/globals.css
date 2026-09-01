@@ -534,6 +534,69 @@ footer p {
   box-shadow: 0 0 0 4px rgba(72, 161, 125, 0.12);
 }
 
+.mobile-device-notice {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+    max(20px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  overflow-y: auto;
+  background: rgba(23, 33, 29, 0.56);
+  backdrop-filter: blur(8px);
+}
+
+.mobile-device-dialog {
+  width: min(100%, 420px);
+  padding: 28px 22px 22px;
+  border: 1px solid rgba(210, 214, 206, 0.95);
+  border-radius: 22px;
+  text-align: center;
+  background: #fffefb;
+  box-shadow: 0 28px 70px rgba(16, 26, 21, 0.28);
+}
+
+.mobile-device-icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin: 0 auto 18px;
+  border-radius: 15px;
+  color: white;
+  background: var(--green);
+}
+
+.mobile-device-icon svg {
+  width: 27px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mobile-device-dialog h2 {
+  margin: 0;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 29px;
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.025em;
+}
+
+.mobile-device-dialog > p:not(.eyebrow) {
+  margin: 14px auto 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.mobile-device-dismiss {
+  margin-top: 22px;
+}
+
 @media (max-width: 620px) {
   main {
     padding: max(28px, env(safe-area-inset-top)) max(15px, env(safe-area-inset-right))

@@ -1,14 +1,54 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { DownloadForm } from './download-form';
 import { JobStatus } from './job-status';
 import { useDownloadWorkflow } from './use-download-workflow';
 
 export function DownloadPage() {
   const workflow = useDownloadWorkflow();
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
+  const [mobileNoticeDismissed, setMobileNoticeDismissed] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setIsMobileDevice(detectMobileDevice()), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   return (
     <main>
+      {isMobileDevice && !mobileNoticeDismissed && (
+        <div className="mobile-device-notice">
+          <section
+            className="mobile-device-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="mobile-device-title"
+            aria-describedby="mobile-device-description"
+          >
+            <div className="mobile-device-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <rect x="3" y="4" width="18" height="12" rx="2" />
+                <path d="M8 20h8M12 16v4" />
+              </svg>
+            </div>
+            <p className="eyebrow">Desktop recommended</p>
+            <h2 id="mobile-device-title">Please use this app on a computer</h2>
+            <p id="mobile-device-description">
+              For reliable downloads and file saving, open this page on a desktop or laptop PC.
+              Mobile browsers are not currently supported.
+            </p>
+            <button
+              className="primary-button mobile-device-dismiss"
+              type="button"
+              autoFocus
+              onClick={() => setMobileNoticeDismissed(true)}
+            >
+              I understand
+            </button>
+          </section>
+        </div>
+      )}
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
       <section className="shell">
@@ -62,5 +102,23 @@ export function DownloadPage() {
         </footer>
       </section>
     </main>
+  );
+}
+
+function detectMobileDevice(): boolean {
+  const navigatorWithHints = navigator as Navigator & {
+    userAgentData?: { mobile?: boolean };
+  };
+
+  if (typeof navigatorWithHints.userAgentData?.mobile === 'boolean') {
+    return navigatorWithHints.userAgentData.mobile;
+  }
+
+  const isDesktopModeIPad =
+    navigatorWithHints.platform === 'MacIntel' && navigatorWithHints.maxTouchPoints > 1;
+
+  return (
+    isDesktopModeIPad ||
+    /Android|iPhone|iPad|iPod|IEMobile|Mobile|Opera Mini/i.test(navigatorWithHints.userAgent)
   );
 }
