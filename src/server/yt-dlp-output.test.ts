@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import type { DownloadServiceRequest } from './download-service';
-import { friendlyYtDlpError, mediaInfoFromJson, parseProgress } from './yt-dlp-output';
+import {
+  friendlyYtDlpError,
+  isRetryableNetworkError,
+  mediaInfoFromJson,
+  parseProgress,
+} from './yt-dlp-output';
 
 const videoRequest: DownloadServiceRequest = {
   canonicalUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
@@ -48,5 +53,16 @@ describe('yt-dlp output parsing', () => {
 
   it('removes the yt-dlp error prefix from public errors', () => {
     expect(friendlyYtDlpError('warning\nERROR: Video unavailable', 1)).toBe('Video unavailable');
+  });
+
+  it('recognizes DNS failures as retryable network errors', () => {
+    expect(
+      isRetryableNetworkError(
+        new Error(
+          "Failed to resolve 'rr4---sn-u15hn5-59.googlevideo.com' ([Errno 8] nodename nor servname provided, or not known)",
+        ),
+      ),
+    ).toBe(true);
+    expect(isRetryableNetworkError(new Error('Video unavailable'))).toBe(false);
   });
 });
