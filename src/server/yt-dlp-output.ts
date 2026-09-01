@@ -61,6 +61,14 @@ export function friendlyYtDlpError(stderr: string, code: number | null): string 
   return lastLine || `yt-dlp exited with code ${code ?? 'unknown'}.`;
 }
 
+export function isRetryableNetworkError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+
+  return /(?:failed to resolve|temporary failure in name resolution|name or service not known|nodename nor servname provided|getaddrinfo failed)/i.test(
+    error.message,
+  );
+}
+
 function selectedSize(info: YtDlpInfo): number | null {
   const selected = info.requested_downloads ?? info.requested_formats;
   if (selected?.length) return sumKnown(selected.map(selectedSize));

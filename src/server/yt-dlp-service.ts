@@ -17,12 +17,15 @@ import { createZipArchive } from './zip';
 import { buildInspectionArguments, buildYtDlpArguments } from './yt-dlp-command';
 import {
   friendlyYtDlpError,
+  isRetryableNetworkError,
   mediaInfoFromJson,
   parseProgress,
   type YtDlpInfo,
 } from './yt-dlp-output';
 
 const MAX_ERROR_OUTPUT = 8_000;
+const MAX_DOWNLOAD_ATTEMPTS = 2;
+const NETWORK_RETRY_DELAY_MS = 1_000;
 
 export class YtDlpDownloadService implements DownloadService {
   constructor(private readonly config: DownloadConfig) {}
@@ -36,7 +39,7 @@ export class YtDlpDownloadService implements DownloadService {
     const workDir = await mkdtemp(path.join(this.config.tempRoot, 'job-'));
 
     try {
-      const reportedPaths = await this.runProcess(request, workDir, callbacks, signal);
+      const reportedPaths = await this.runWithNetworkRetry(request, workDir, callbacks, signal);
       const filePaths = await this.resolveOutputPaths(workDir, reportedPaths);
 
       if (request.sourceKind === 'playlist') {
@@ -127,6 +130,27 @@ export class YtDlpDownloadService implements DownloadService {
         }),
       );
     });
+  }
+
+  private async runWithNetworkRetry(
+    request: DownloadServiceRequest,
+    workDir: string,
+    callbacks: DownloadCallbacks,
+    signal: AbortSignal,
+  ): Promise<string[]> {
+    for (let attempt = 1; attempt <= MAX_DOWNLOAD_ATTEMPTS; attempt += 1) {
+      try {
+        return await this.runProcess(request, workDir, callbacks, signal);
+      } catch (error) {
+        const canRetry = attempt < MAX_DOWNLOAD_ATTEMPTS && isRetryableNetworkError(error);
+        if (!canRetry || signal.aborted) throw error;
+
+        callbacks.onStage('connecting');
+        await waitForRetry(NETWORK_RETRY_DELAY_MS, signal);
+      }
+    }
+
+    throw new Error('The download failed unexpectedly.');
   }
 
   private runProcess(
@@ -278,4 +302,22 @@ function abortError(): Error {
   const error = new Error('Download cancelled.');
   error.name = 'AbortError';
   return error;
+}
+
+function waitForRetry(delayMs: number, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (signal.aborted) return reject(abortError());
+
+    const timer = setTimeout(finish, delayMs);
+    const onAbort = () => finish(abortError());
+
+    function finish(error?: Error) {
+      clearTimeout(timer);
+      signal.removeEventListener('abort', onAbort);
+      if (error) reject(error);
+      else resolve();
+    }
+
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
 }
